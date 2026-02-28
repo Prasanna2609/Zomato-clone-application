@@ -10,4 +10,9 @@ env/
 coverage/
 *.parquet
 *.csv
-data/
+
+# Ignore all files in data directory
+data/*
+
+# Explicitly allow the production dataset
+!data/zomato_cleaned.parquet
