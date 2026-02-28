@@ -8,6 +8,8 @@ import pandas as pd
 from shared.config.config import ZOMATO_CLEAN_PARQUET_PATH
 
 
+_cached_df: Optional[pd.DataFrame] = None
+
 def load_cleaned_zomato(path: Optional[str | Path] = None) -> pd.DataFrame:
     """
     Load the cleaned Zomato dataset produced by Phase 1.
@@ -24,16 +26,19 @@ def load_cleaned_zomato(path: Optional[str | Path] = None) -> pd.DataFrame:
         The cleaned restaurant records, including normalized price, rating,
         cuisines, and a stable `restaurant_id`.
     """
+    global _cached_df
+    if _cached_df is not None and path is None:
+        return _cached_df
+
     parquet_path = Path(path) if path is not None else ZOMATO_CLEAN_PARQUET_PATH
     if not parquet_path.exists():
-        from phases.phase_1_data_ingestion.backend.data_ingestion.zomato_ingestion import run_full_ingestion
-        print(f"Cleaned dataset not found at {parquet_path}. Triggering auto-ingestion...")
-        run_full_ingestion()
-        
-        if not parquet_path.exists():
-            raise FileNotFoundError(
-                f"Auto-ingestion failed to produce dataset at {parquet_path}."
-            )
+        raise FileNotFoundError(
+            f"Dataset not found at {parquet_path}. "
+            "Run ingestion locally before deployment."
+        )
 
-    return pd.read_parquet(parquet_path)
+    df = pd.read_parquet(parquet_path)
+    if path is None:
+        _cached_df = df
+    return df
 
