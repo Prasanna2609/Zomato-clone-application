@@ -1,0 +1,13 @@
+node_modules/
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
+env/
+.DS_Store
+.next/
+coverage/
+*.parquet
+*.csv
+data/
