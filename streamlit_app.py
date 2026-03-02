@@ -17,60 +17,42 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 st.set_page_config(
-    page_title="Zomato AI Recommendations",
-    page_icon="🍔",
-    layout="centered"
+    page_title="Zomato AI Matchmaker",
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
-# Application CSS
-st.markdown("""
-<style>
+def load_css():
+    st.markdown("""
+    <style>
+    .main {background: linear-gradient(180deg,#0f172a,#111827);}
     .restaurant-card {
-        padding: 1.5rem;
-        border-radius: 10px;
-        border: 1px solid #e0e0e0;
-        margin-bottom: 1rem;
-        background-color: #ffffff;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        background:#111827;
+        padding:20px;
+        border-radius:14px;
+        margin-bottom:20px;
+        box-shadow:0 6px 20px rgba(0,0,0,0.35);
     }
     .restaurant-title {
-        color: #cb202d;
-        font-size: 1.5rem;
-        font-weight: bold;
-        margin-bottom: 0.5rem;
-    }
-    .restaurant-cuisines {
-        color: #666;
-        font-style: italic;
-        margin-bottom: 0.5rem;
+        font-size:22px;
+        font-weight:600;
+        color:white;
     }
     .restaurant-meta {
-        display: flex;
-        gap: 1rem;
-        margin-bottom: 1rem;
-        font-size: 0.9rem;
+        color:#9ca3af;
+        font-size:14px;
     }
-    .rating-badge {
-        background-color: #24963f;
-        color: white;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-weight: bold;
+    .rating-pill {
+        background:#dc2626;
+        padding:6px 12px;
+        border-radius:999px;
+        color:white;
+        font-weight:600;
     }
-    .cost-badge {
-        color: #444;
-        font-weight: 500;
-    }
-    .explanation-box {
-        background-color: #f8f9fa;
-        padding: 1rem;
-        border-radius: 6px;
-        border-left: 4px solid #cb202d;
-        font-size: 0.95rem;
-        line-height: 1.4;
-    }
-</style>
-""", unsafe_allow_html=True)
+    </style>
+    """, unsafe_allow_html=True)
+
+load_css()
 
 
 @st.cache_resource
@@ -205,27 +187,23 @@ def main():
                     rest = r.restaurant
                     
                     # Convert fields safely
-                    name = str(rest.get("name", "Unknown"))
-                    loc = str(rest.get("location", ""))
-                    cuisine_str = str(rest.get("cuisines", ""))
-                    rating = rest.get("rating", "N/A")
-                    cost = rest.get("approx_cost", "N/A")
-                    
-                    st.markdown(f"""
-                    <div class="restaurant-card">
-                        <div class="restaurant-title">{name}</div>
-                        <div class="restaurant-cuisines">🍽️ {cuisine_str}</div>
-                        <div class="restaurant-meta">
-                            <span class="rating-badge">⭐ {rating}/5</span>
-                            <span class="cost-badge">💰 ₹{cost} for two</span>
-                            <span>📍 {loc}</span>
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.markdown(f"""
+                        <div class="restaurant-card">
+                            <div class="restaurant-title">{name}</div>
+                            <div class="restaurant-meta" style="margin-bottom: 0.5rem;">🍽️ {cuisine_str}</div>
+                            <div class="restaurant-meta" style="margin-bottom: 1rem;">
+                                <span class="rating-pill">⭐ {rating}/5</span>
+                                <span style="margin-left: 15px;">💰 ₹{cost} for two</span>
+                                <span style="margin-left: 15px;">📍 {loc}</span>
+                            </div>
+                            <div style="color: #e5e7eb; font-size: 0.95rem; line-height: 1.5;">
+                                <strong>Why this place?</strong><br/>
+                                {r.explanation}
+                            </div>
                         </div>
-                        <div class="explanation-box">
-                            <strong>Why this place?</strong><br/>
-                            {r.explanation}
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
                     
             except Exception as e:
                 logger.error(f"Recommendation failed: {e}", exc_info=True)
