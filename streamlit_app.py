@@ -1,7 +1,7 @@
 import streamlit as st
 import logging
 import time
-
+import pandas as pd
 from phases.phase_1_data_ingestion.backend.data_ingestion.loader import load_cleaned_zomato
 from phases.phase_2_recommendation_engine.backend.recommendation_engine import (
     Mood, 
