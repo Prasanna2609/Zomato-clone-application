@@ -82,7 +82,12 @@ def get_dataset():
 def get_options():
     """Extract location and cuisine options memory-efficiently."""
     dataset = get_dataset()
-    df = dataset.to_table(columns=["location", "cuisines_normalized"]).to_pandas()
+    
+    # Handle both Pandas DataFrame (Streamlit Cloud fallback) and PyArrow Dataset
+    if isinstance(dataset, pd.DataFrame):
+        df = dataset[["location", "cuisines_normalized"]]
+    else:
+        df = dataset.to_table(columns=["location", "cuisines_normalized"]).to_pandas()
     
     locations = sorted(df["location"].dropna().unique().tolist())
     
@@ -93,7 +98,10 @@ def get_options():
     
     cuisines = sorted(list(all_cuisines))
     
-    del df
+    # Only delete if we created a new slice from PyArrow
+    if not isinstance(dataset, pd.DataFrame):
+        del df
+        
     return {"locations": locations, "cuisines": cuisines}
 
 

@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import logging
 import numpy as np
 import pandas as pd
+import pyarrow.compute as pc
 
 from phases.phase_1_data_ingestion.backend.data_ingestion.loader import load_cleaned_zomato
 
@@ -267,39 +268,69 @@ def _build_explanation(row: pd.Series, matched: Dict[str, Any]) -> str:
 def generate_recommendations(
     user_preference: UserPreference,
     top_n: int = 10,
-    dataframe: Optional[pd.DataFrame] = None,
+    dataset: Any = None,
 ) -> List[Recommendation]:
     """
     Deterministic recommendation pipeline for Phase 2.
 
     Steps:
-    - Load cleaned dataset (or use the provided DataFrame).
-    - Filter by location, price range, rating, and cuisines.
+    - Load cleaned dataset (or use the provided PyArrow Dataset).
+    - Filter by location and rating lazily using PyArrow.
+    - Convert matches to pandas and filter by cuisines.
     - Compute a weighted score per restaurant using mood-adjusted weights.
     - Return top-N `Recommendation` objects.
     """
 
-    df = dataframe if dataframe is not None else load_cleaned_zomato()
+    ds_obj = dataset if dataset is not None else load_cleaned_zomato()
+    
+    # Handle Pandas DataFrame directly (Streamlit Cloud fallback)
+    if isinstance(ds_obj, pd.DataFrame):
+        initial_count = len(ds_obj)
+        if "location" not in ds_obj.columns:
+            raise KeyError("Expected 'location' column in cleaned Zomato dataset.")
+        
+        user_loc = user_preference.location.lower()
+        location_series = ds_obj["location"].fillna("").astype(str).str.lower()
+        location_mask = location_series.str.contains(user_loc, na=False)
+        
+        if user_preference.rating_min is not None and "rating" in ds_obj.columns:
+            rating_mask = ds_obj["rating"] >= user_preference.rating_min
+        else:
+            rating_mask = pd.Series(np.ones(len(ds_obj), dtype=bool), index=ds_obj.index)
+            
+        df = ds_obj[location_mask & rating_mask].copy()
+        
+    else:
+        # Standard PyArrow lazy loading (Local / Main backend)
+        initial_count = ds_obj.count_rows()
+
+        if "location" not in ds_obj.schema.names:
+            raise KeyError("Expected 'location' column in cleaned Zomato dataset.")
+
+        user_loc = user_preference.location.lower()
+        
+        # Use PyArrow for basic filters (location, rating)
+        loc_expr = pc.match_substring(pc.utf8_lower(pc.field("location")), user_loc)
+        
+        if user_preference.rating_min is not None and "rating" in ds_obj.schema.names:
+            filter_expr = loc_expr & (pc.field("rating") >= user_preference.rating_min)
+        else:
+            filter_expr = loc_expr
+
+        # Apply PyArrow filter & convert just matches to Pandas
+        table = ds_obj.to_table(filter=filter_expr)
+        df = table.to_pandas()
+    
+    scanned_count = len(df)
+    logger.info(f"PyArrow filtering: Scanned {initial_count} rows -> {scanned_count} rows returned for Pandas logic.")
 
     if df.empty:
-        logger.warning("Empty dataframe loaded for recommendations.")
+        logger.info(f"Filtering resulted in 0 matches for location: {user_loc}, rating >= {user_preference.rating_min}")
         return []
 
-    initial_count = len(df)
-
-    if "location" not in df.columns:
-        raise KeyError("Expected 'location' column in cleaned Zomato dataset.")
-
-    # Build location and rating masks.
-    user_loc = user_preference.location.lower()
-
-    location_series = df["location"].fillna("").astype(str).str.lower()
-    location_mask = location_series.str.contains(user_loc, na=False)
-
-    if user_preference.rating_min is not None and "rating" in df.columns:
-        rating_mask = df["rating"] >= user_preference.rating_min
-    else:
-        rating_mask = pd.Series(np.ones(len(df), dtype=bool), index=df.index)
+    # Build location and rating masks (already filtered by PyArrow, so all True)
+    location_mask = pd.Series(np.ones(len(df), dtype=bool), index=df.index)
+    rating_mask = pd.Series(np.ones(len(df), dtype=bool), index=df.index)
 
     # Cuisine hard filter: at least one matching cuisine (case-insensitive)
     if user_preference.cuisines:
